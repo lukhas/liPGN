@@ -15,12 +15,7 @@
 (declare username->games)
 
 (defn last-game-timestamp [dal username]
-  (->> username
-    (username->games dal)
-    (sort-by :timestamp)
-    reverse
-    first
-    :timestamp))
+  (:timestamp (dal/username->last-game dal username)))
 
 (defn update-user [dal url username]
   (-> (str "Updating user " username " from server.\n")
@@ -67,10 +62,8 @@
 
 (defn username->games
   ([dal username]
-   (username->games dal username (constantly true)))
+   (dal/username->games dal username))
 
   ([dal username custom-filter]
-   (->> "game"
-        (dal/find-all-deep dal)
-        (filter #(= username (:userId %)))
+   (->> (username->games dal username)
         (filter custom-filter))))
