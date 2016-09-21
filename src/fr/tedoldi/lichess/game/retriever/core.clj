@@ -1,3 +1,12 @@
+;   Copyright (c)  Sylvain Tedoldi. All rights reserved.
+;   The use and distribution terms for this software are covered by the
+;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
+;   which can be found in the file epl-v10.html at the root of this distribution.
+;   By using this software in any fashion, you are agreeing to be bound by
+;   the terms of this license.
+;   You must not remove this notice, or any other, from this software.
+;
+
 (ns fr.tedoldi.lichess.game.retriever.core
   (:require
     [environ.core :as env]
@@ -12,9 +21,17 @@
     [fr.tedoldi.lichess.game.retriever.orientdb :as dal]))
 
 
+(defn- -parse-csv-param [param]
+  (->> (str/split (str param) #",")
+       (map str/trim)
+       (remove str/blank?)
+       (map str/lower-case)
+       (into #{})))
+
 (defn export! [{:keys [quiet url casual variant speed
                        output store no-sync username
-                       color]}]
+                       color]
+                :as options}]
   (if (str/blank? username)
     (throw (Exception. "You must provide a username!"))
 
@@ -38,7 +55,10 @@
           color/blue
           console/print-err)
 
-      (let [games (game/username->games
+      (let [variants (-parse-csv-param variant)
+            speeds   (-parse-csv-param speed)
+
+            games (game/username->games
                     dal
                     username
                     #(and
@@ -50,20 +70,24 @@
                          true
                          (:rated %))
 
-                       (if speed
-                         (= speed (:speed %))
-                         true)
+                       (if (empty? speeds)
+                         true
+                         (contains? speeds (str/lower-case (:speed %))))
 
-                       (if variant
-                         (= variant (:variant %))
-                         (not= "fromPosition" (:variant %)))))]
+                       (if (empty? variants)
+                         (not= "fromPosition" (:variant %))
+                         (contains? variants (str/lower-case (:variant %))))))]
 
         (-> (str "Parsing " (count games) " games...\n")
           color/blue
           console/print-err)
 
         (->> games
-             (pmap pgn/game->pgn)
+             (pmap #(pgn/game->pgn %
+                                   (select-keys options
+                                                [:with-times
+                                                 :template-pgn
+                                                 :template-move-pair])))
              clojure.string/join
              (spit out))
 
